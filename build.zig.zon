@@ -1,0 +1,20 @@
+.{
+    .name = .sdl3_tmp,
+    .version = "0.15.2",
+    .dependencies = .{
+        .sdl3 = .{
+            .url = "git+https://github.com/Gota7/zig-sdl3?ref=master#014b7bcb2899f3ed9c945c4abfcfe1b25d75bfeb",
+            .hash = "sdl3-0.1.5-NmT1QxARJgAH1Wp0cMBJDAc9vD7weufTkIwVa5rehA2q",
+        },
+        .zemscripten = .{
+            .url = "git+https://github.com/zig-gamedev/zemscripten?ref=main#dca717d4779423768ce4b8723f2bf8aeb14468b2",
+            .hash = "zemscripten-0.2.0-dev-sRlDqGdQAADOptI5YVB9W3hsuHjwI3b6crwRZjZfOk90",
+        },
+        .emsdk = .{
+            .url = "https://github.com/emscripten-core/emsdk/archive/refs/tags/4.0.3.tar.gz",
+            .hash = "N-V-__8AAOG3BQCJ9cn-N2swm2o5cLmDhmdHmtwNngOChK78",
+        },
+    },
+    .paths = .{""},
+    .fingerprint = 0xe17397350ce16c30,
+}
