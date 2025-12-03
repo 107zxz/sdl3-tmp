@@ -6,9 +6,6 @@ comptime {
     _ = sdl3.main_callbacks;
 }
 
-const window_width = 640;
-const window_height = 480;
-
 pub const _start = void;
 pub const WinMainCRTStartup = void;
 
@@ -21,9 +18,10 @@ const AppState = struct {
     window: sdl3.video.Window,
     renderer: sdl3.render.Renderer,
     frame_capper: sdl3.extras.FramerateCapper(f32),
+    game_tex: sdl3.render.Texture,
 
-    cursor: sdl3.render.Texture,
-    bg_tex: sdl3.render.Texture,
+    cursor: sdl3.surface.Surface,
+    bg_tex: sdl3.surface.Surface,
 };
 
 pub fn init(
@@ -37,39 +35,36 @@ pub fn init(
 
     const window, const renderer = try sdl3.render.Renderer.initWithWindow(
         "Hello SDL3",
-        window_width,
-        window_height,
-        .{.resizable = true,},
+        640,
+        640,
+        .{.resizable = true},
     );
     errdefer renderer.deinit();
     errdefer window.deinit();
 
+    const displays = try sdl3.video.getDisplays();
+    defer sdl3.free(displays);
+
+    try window.setPosition(.{.centered = displays[0]}, .{.centered = displays[0]});
     const frame_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 60 } };
+
+    const game_tex = try sdl3.render.Texture.init(renderer, .array_rgba_32, .streaming, 128, 128);
+    try game_tex.setScaleMode(.nearest);
     
     try renderer.setLogicalPresentation(128, 128, .letter_box) ;
 
     try sdl3.mouse.hide();
 
-    const cursor = try sdl3.image.loadTextureIo(
-        renderer,
-        try sdl3.io_stream.Stream.initFromConstMem(cursor_tex),
-        true
-    );
-    try cursor.setScaleMode(.nearest);
-
-    const bg = try sdl3.image.loadTextureIo(
-        renderer,
-        try sdl3.io_stream.Stream.initFromConstMem(bg_tex),
-        true
-    );
-    try bg.setScaleMode(.nearest);
+    const cursor = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromConstMem(cursor_tex));
+    const bg = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromConstMem(bg_tex));
 
     state.* = .{
         .window = window,
         .renderer = renderer,
         .cursor = cursor,
         .frame_capper = frame_capper,
-        .bg_tex = bg
+        .bg_tex = bg,
+        .game_tex = game_tex,
     };
     app_state.* = state;
 
@@ -88,28 +83,21 @@ pub fn iterate(
     const mx = mouseState.@"1" - wrect.x;
     const my = mouseState.@"2" - wrect.y;
 
-    const wx: f32 = wrect.w;
-    const wy: f32 = wrect.h;
+    const ww: f32 = wrect.w;
+    const wh: f32 = wrect.h;
     
     try app_state.renderer.setDrawColor(.{ .r = 0, .g = 0, .b = 0, .a = 255 });
     try app_state.renderer.clear();
 
-    try app_state.renderer.renderTexture(app_state.bg_tex, null, null);
+    {
+        const game_surf = try app_state.game_tex.lockToSurface(null);
+        defer app_state.game_tex.unlock();
 
-    // try app_state.renderer.renderDebugText(.{.x=@round(mx/wx*128),.y=@round(my/wy*128)}, "Mouse X: ");
+        try app_state.bg_tex.blit(null, game_surf, null);
+        try app_state.cursor.blit(null, game_surf, .{.x=@intFromFloat(mx/ww*128), .y=@intFromFloat(my/wh*128)});
+    }
 
-    // Cool way to do gradients, hopefully find a way to do this better
-    // try app_state.renderer.renderGeometry(app_state.bg_tex, &[_]sdl3.render.Vertex{
-        // .{.position=.{.x=0,.y=0},.color=.{.r=1,.g=1,.b=1,.a=1},.tex_coord=.{.x=0,.y=0}},
-        // .{.position=.{.x=128,.y=0},.color=.{.r=1,.g=1,.b=1,.a=1},.tex_coord=.{.x=1,.y=0}},
-        // .{.position=.{.x=128,.y=128},.color=.{.r=0,.g=0,.b=0,.a=1},.tex_coord=.{.x=1,.y=1}},
-        // .{.position=.{.x=0,.y=128},.color=.{.r=0,.g=0,.b=0,.a=1},.tex_coord=.{.x=0,.y=1}},
-    // }, &[_]c_int{
-        // 0,1,2,
-        // 0,2,3
-    // });
-
-    try app_state.renderer.renderTexture(app_state.cursor, null, .{.x=@round(mx/wx*128),.y=@round(my/wy*128),.w=8,.h=8});
+    try app_state.renderer.renderTexture(app_state.game_tex, null, null);
 
     try app_state.renderer.present();
     return .run;
