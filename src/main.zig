@@ -2,6 +2,8 @@ const sdl3 = @import("sdl3");
 const std = @import("std");
 const builtin = @import("builtin");
 
+const imui = @import("imui.zig");
+
 comptime {
     _ = sdl3.main_callbacks;
 }
@@ -80,7 +82,7 @@ pub fn init(
     const game_font = try sdl3.ttf.Font.initFromIO(try sdl3.io_stream.Stream.initFromConstMem(fnt_mem), true, 6);
     const game_font_rte = try sdl3.ttf.RendererTextEngine.init(log_renderer);
 
-    try log_renderer.setLogicalPresentation(128, 256, .letter_box);
+    try log_renderer.setLogicalPresentation(96, 192, sdl3.render.LogicalPresentation.overscan);
     try log_window.setPosition(.{ .absolute = 0 } , .{ .absolute = 0 });
 
     state.* = .{
@@ -139,9 +141,17 @@ pub fn iterate(
     // Log handling
     try app_state.log_renderer.setDrawColor(.{ .a = 255,.b = 0,.g = 0,.r = 0 } );
     try app_state.log_renderer.clear();
-    const log_text = try sdl3.ttf.Text.init(.{.value=app_state.game_font_rte.value}, app_state.game_font, "Hello");
+
+    const log_str = try std.fmt.allocPrint(allocator, "mouse pos: {d:.2},{d:.2}", .{mx/ww,my/ww});
+    defer allocator.free(log_str);
+    const log_text = try sdl3.ttf.Text.init(.{.value=app_state.game_font_rte.value}, app_state.game_font, log_str);
     try log_text.setColor(255, 255, 255, 255);
     try sdl3.ttf.drawRendererText(log_text,0,0);
+
+    if (try imui.IM_Button(app_state.log_renderer, app_state.game_font_rte, app_state.game_font, 0, 12, "hi")) {
+        try sdl3.log.log("Hi", .{});
+    }
+
     try app_state.log_renderer.present();
     return .run;
 }
