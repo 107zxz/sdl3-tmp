@@ -12,6 +12,8 @@ pub const WinMainCRTStartup = void;
 const cursor_tex = @embedFile("data/cursor.png");
 const bg_tex = @embedFile("data/arch.png");
 
+const fnt_mem = @embedFile("data/pico.ttf");
+
 const allocator = if (builtin.os.tag != .emscripten) std.heap.smp_allocator else std.heap.c_allocator;
 
 const AppState = struct {
@@ -20,8 +22,14 @@ const AppState = struct {
     frame_capper: sdl3.extras.FramerateCapper(f32),
     game_tex: sdl3.render.Texture,
 
+    game_font: sdl3.ttf.Font,
+    game_font_rte: sdl3.ttf.RendererTextEngine,
+
     cursor: sdl3.surface.Surface,
     bg_tex: sdl3.surface.Surface,
+
+    log_window: sdl3.video.Window,
+    log_renderer: sdl3.render.Renderer,
 };
 
 pub fn init(
@@ -29,6 +37,8 @@ pub fn init(
     args: [][*:0]u8,
 ) !sdl3.AppResult {
     _ = args;
+
+    try sdl3.ttf.init();
 
     const state = try allocator.create(AppState);
     errdefer allocator.destroy(state);
@@ -42,6 +52,15 @@ pub fn init(
     errdefer renderer.deinit();
     errdefer window.deinit();
 
+    const log_window, const log_renderer = try sdl3.render.Renderer.initWithWindow(
+        "Game Log",
+        256,
+        512,
+        .{.resizable = true},
+    );
+    errdefer log_renderer.deinit();
+    errdefer log_window.deinit();
+
     const displays = try sdl3.video.getDisplays();
     defer sdl3.free(displays);
 
@@ -51,12 +70,18 @@ pub fn init(
     const game_tex = try sdl3.render.Texture.init(renderer, .array_rgba_32, .streaming, 128, 128);
     try game_tex.setScaleMode(.nearest);
     
-    try renderer.setLogicalPresentation(128, 128, .letter_box) ;
+    try renderer.setLogicalPresentation(128, 128, .letter_box);
 
     try sdl3.mouse.hide();
 
     const cursor = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromConstMem(cursor_tex));
     const bg = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromConstMem(bg_tex));
+
+    const game_font = try sdl3.ttf.Font.initFromIO(try sdl3.io_stream.Stream.initFromConstMem(fnt_mem), true, 6);
+    const game_font_rte = try sdl3.ttf.RendererTextEngine.init(log_renderer);
+
+    try log_renderer.setLogicalPresentation(128, 256, .letter_box);
+    try log_window.setPosition(.{ .absolute = 0 } , .{ .absolute = 0 });
 
     state.* = .{
         .window = window,
@@ -65,6 +90,12 @@ pub fn init(
         .frame_capper = frame_capper,
         .bg_tex = bg,
         .game_tex = game_tex,
+
+        .game_font = game_font,
+        .game_font_rte = game_font_rte,
+        
+        .log_window = log_window,
+        .log_renderer = log_renderer,
     };
     app_state.* = state;
 
@@ -77,7 +108,6 @@ pub fn iterate(
 
     _ = app_state.frame_capper.delay();
 
-    
     const mouseState = sdl3.mouse.getState();
     const wrect = try app_state.renderer.getLogicalPresentationRect();
     const mx = mouseState.@"1" - wrect.x;
@@ -94,12 +124,25 @@ pub fn iterate(
         defer app_state.game_tex.unlock();
 
         try app_state.bg_tex.blit(null, game_surf, null);
-        try app_state.cursor.blit(null, game_surf, .{.x=@intFromFloat(mx/ww*128), .y=@intFromFloat(my/wh*128)});
+
+        if (sdl3.mouse.getFocus() == app_state.window) {
+            try app_state.cursor.blit(null, game_surf, .{.x=@intFromFloat(mx/ww*128), .y=@intFromFloat(my/wh*128)});
+            try sdl3.mouse.hide();
+        } else
+            try sdl3.mouse.show();
     }
 
     try app_state.renderer.renderTexture(app_state.game_tex, null, null);
 
     try app_state.renderer.present();
+
+    // Log handling
+    try app_state.log_renderer.setDrawColor(.{ .a = 255,.b = 0,.g = 0,.r = 0 } );
+    try app_state.log_renderer.clear();
+    const log_text = try sdl3.ttf.Text.init(.{.value=app_state.game_font_rte.value}, app_state.game_font, "Hello");
+    try log_text.setColor(255, 255, 255, 255);
+    try sdl3.ttf.drawRendererText(log_text,0,0);
+    try app_state.log_renderer.present();
     return .run;
 }
 

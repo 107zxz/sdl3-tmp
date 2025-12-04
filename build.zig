@@ -17,6 +17,7 @@ fn buildBin(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.built
         .optimize = std.builtin.OptimizeMode.ReleaseFast,
         .callbacks = true,
         .ext_image = true,
+        .ext_ttf = true,
         .image_enable_png = true,
     });
     exe.root_module.addImport("sdl3", sdl3.module("sdl3"));
