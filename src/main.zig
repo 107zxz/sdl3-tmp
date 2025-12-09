@@ -32,6 +32,8 @@ const AppState = struct {
 
     log_window: sdl3.video.Window,
     log_renderer: sdl3.render.Renderer,
+    // Note: This is realloc'd every time something is added to the log
+    log_str: []const u8,
 };
 
 pub fn init(
@@ -58,7 +60,7 @@ pub fn init(
         "Game Log",
         256,
         512,
-        .{.resizable = true},
+        .{.utility = true, .not_focusable = true},
     );
     errdefer log_renderer.deinit();
     errdefer log_window.deinit();
@@ -83,7 +85,11 @@ pub fn init(
     const game_font_rte = try sdl3.ttf.RendererTextEngine.init(log_renderer);
 
     try log_renderer.setLogicalPresentation(96, 192, sdl3.render.LogicalPresentation.overscan);
-    try log_window.setPosition(.{ .absolute = 0 } , .{ .absolute = 0 });
+    try log_window.setPosition(.{ .absolute = 1034 }, .{ .centered = null });
+
+    const log_init = "Game booted!";
+    const log_str = try allocator.alloc(u8, log_init.len);
+    @memcpy(log_str, log_init);
 
     state.* = .{
         .window = window,
@@ -98,6 +104,7 @@ pub fn init(
         
         .log_window = log_window,
         .log_renderer = log_renderer,
+        .log_str = log_str
     };
     app_state.* = state;
 
@@ -142,14 +149,14 @@ pub fn iterate(
     try app_state.log_renderer.setDrawColor(.{ .a = 255,.b = 0,.g = 0,.r = 0 } );
     try app_state.log_renderer.clear();
 
-    const log_str = try std.fmt.allocPrint(allocator, "mouse pos: {d:.2},{d:.2}", .{mx/ww,my/ww});
-    defer allocator.free(log_str);
-    const log_text = try sdl3.ttf.Text.init(.{.value=app_state.game_font_rte.value}, app_state.game_font, log_str);
+    const log_text = try sdl3.ttf.Text.init(.{.value=app_state.game_font_rte.value}, app_state.game_font, app_state.log_str);
     try log_text.setColor(255, 255, 255, 255);
-    try sdl3.ttf.drawRendererText(log_text,0,0);
+    try sdl3.ttf.drawRendererText(log_text,2,12);
 
-    if (try imui.IM_Button(app_state.log_renderer, app_state.game_font_rte, app_state.game_font, 0, 12, "hi")) {
-        try sdl3.log.log("Hi", .{});
+    if (try imui.IM_Button(app_state.log_renderer, app_state.game_font_rte, app_state.game_font, 2, 2, "break something")) {
+        const new_log = try std.mem.concat(allocator, u8, &[_][]const u8{app_state.log_str, "\nHi!"});
+        allocator.free(app_state.log_str);
+        app_state.log_str=new_log;
     }
 
     try app_state.log_renderer.present();
@@ -163,7 +170,7 @@ pub fn event(
     switch (curr_event) {
         .terminating => return .success,
         .quit => return .success,
-        .key_down => |key| switch (key.key.?) {
+        .key_down => |key_e| if (key_e.key) |key| switch (key) {
             .f => try app_state.window.setFullscreen(!app_state.window.getFlags().fullscreen),
             .escape => return .success,
             else => {}

@@ -1,0 +1,10 @@
+.{
+    .{
+        .name="Hello, World!",
+        .say_hi=.{
+            "Damn",
+            "Hello",
+            "Goodbye"
+        }
+    }
+}

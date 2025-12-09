@@ -15,7 +15,6 @@ fn buildBin(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.built
     const sdl3 = b.dependency("sdl3", .{
         .target = target,
         .optimize = std.builtin.OptimizeMode.ReleaseFast,
-        .callbacks = true,
         .ext_image = true,
         .ext_ttf = true,
         .image_enable_png = true,
