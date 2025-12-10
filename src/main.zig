@@ -43,6 +43,10 @@ pub fn main() !void {
     // Useful for limiting the FPS and getting the delta time.
     var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 30 } };
 
+    // State: hit test
+    var show_hints = false;
+    var win_pos = sdl3.rect.IPoint{.x=32,.y=32};
+
     var quit = false;
     while (!quit) {
 
@@ -56,6 +60,9 @@ pub fn main() !void {
             const winSrf = try win.getSurface();
             try winSrf.fillRect(null, surface.mapRgb(128, 30, 255));
             try winSrf.fillRect(.{.x=0,.y=0,.w=192,.h=32}, surface.mapRgb(30, 128, 255));
+
+            if (show_hints) try winSrf.fillRect(null, surface.mapRgb(255, 0, 0));
+            
             try win.updateSurface();
         }
 
@@ -66,7 +73,7 @@ pub fn main() !void {
         try winItem.updateSurface();
 
         // Constantly try to move back to your origin, grabbing will prevent
-        try winItem.setPosition(.{ .absolute = 0 }, .{ .absolute = 0 } );
+        try winItem.setPosition(.{ .absolute = win_pos.x }, .{ .absolute = win_pos.y } );
 
         // Event logic.
         while (sdl3.events.poll()) |event|
@@ -79,8 +86,25 @@ pub fn main() !void {
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
-                else => {},
+
+                // Item dragging magic
+                .window_hit_test => |wht| if (wht.id==try winItem.getId()) {
+                    show_hints=true;
+                    win_pos=.{ .x = -64,.y=-64 };
+                },
+                .window_mouse_leave => |wme| {
+                    if (wme.id == (try winItem.getId()) and sdl3.events.has(.window_moved)) {
+                        _, const px, const py = sdl3.mouse.getGlobalState();
+                        win_pos.x = @intFromFloat(px-32);
+                        win_pos.y = @intFromFloat(py-32);
+                    }
+                    show_hints=false;
+                    try winItem.show();
+                },
+                else => {}
             };
+
+
 
         // const currPos = try win2.getPosition();
         // try win2.setPosition(.{.absolute = currPos.@"0"+1}, .{ .undefined = null } );
