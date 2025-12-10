@@ -7,13 +7,6 @@ fn htr_top(w: sdl3.video.Window, p: sdl3.rect.Point(i32), u: ?*void) sdl3.video.
     return if (p.y<32) sdl3.video.HitTestResult.draggable else sdl3.video.HitTestResult.normal;
 }
 
-fn htr_all(w: sdl3.video.Window, p: sdl3.rect.Point(i32), u: ?*void) sdl3.video.HitTestResult {
-    _=w;
-    _=u;
-    _=p;
-    return sdl3.video.HitTestResult.draggable;
-}
-
 pub fn main() !void {
     defer sdl3.shutdown();
 
@@ -38,15 +31,11 @@ pub fn main() !void {
     const winItem = try sdl3.video.Window.init("Dummy Item", 64, 64, .{.utility = true, .borderless = true, .open_gl = true, .transparent = true});
     defer winItem.deinit();
     try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
-    try winItem.setHitTest(void, htr_all, null);
+
+    // Capture mouse
 
     // Useful for limiting the FPS and getting the delta time.
-    var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 30 } };
-
-    // State: hit test
-    var show_hints = false;
-    var win_pos = sdl3.rect.IPoint{.x=32,.y=32};
-
+    var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 60 } };
     var quit = false;
     while (!quit) {
 
@@ -61,8 +50,6 @@ pub fn main() !void {
             try winSrf.fillRect(null, surface.mapRgb(128, 30, 255));
             try winSrf.fillRect(.{.x=0,.y=0,.w=192,.h=32}, surface.mapRgb(30, 128, 255));
 
-            if (show_hints) try winSrf.fillRect(null, surface.mapRgb(255, 0, 0));
-            
             try win.updateSurface();
         }
 
@@ -71,9 +58,6 @@ pub fn main() !void {
         try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 255));
         try srfItem.blit(null, itmSef, null);
         try winItem.updateSurface();
-
-        // Constantly try to move back to your origin, grabbing will prevent
-        try winItem.setPosition(.{ .absolute = win_pos.x }, .{ .absolute = win_pos.y } );
 
         // Event logic.
         while (sdl3.events.poll()) |event|
@@ -86,27 +70,16 @@ pub fn main() !void {
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
-
-                // Item dragging magic
-                .window_hit_test => |wht| if (wht.id==try winItem.getId()) {
-                    show_hints=true;
-                    win_pos=.{ .x = -64,.y=-64 };
+                .window_focus_gained => |wn| if (wn.id==try winItem.getId()) {
+                    try sdl3.mouse.setWindowRelativeMode(winItem, true);
+                   // try winItem.setMouseGrab(true);
                 },
-                .window_mouse_leave => |wme| {
-                    if (wme.id == (try winItem.getId()) and sdl3.events.has(.window_moved)) {
-                        _, const px, const py = sdl3.mouse.getGlobalState();
-                        win_pos.x = @intFromFloat(px-32);
-                        win_pos.y = @intFromFloat(py-32);
-                    }
-                    show_hints=false;
-                    try winItem.show();
+                .mouse_motion => |mm| if (sdl3.mouse.getWindowRelativeMode(winItem)) {
+                    const wp = try winItem.getPosition();
+                    try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel/4+@as(f32,@floatFromInt(wp.@"0")) ) } , .{ .absolute = @intFromFloat(mm.y_rel/4+@as(f32,@floatFromInt(wp.@"1")) ) });
+                    //sdl3.mouse.warpInWindow(null, 32, 32);
                 },
                 else => {}
             };
-
-
-
-        // const currPos = try win2.getPosition();
-        // try win2.setPosition(.{.absolute = currPos.@"0"+1}, .{ .undefined = null } );
-    }
+   }
 }
