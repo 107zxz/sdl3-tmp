@@ -15,6 +15,34 @@ pub fn main() !void {
     try sdl3.init(init_flags);
     defer sdl3.quit(init_flags);
 
+    // Memory allocation
+    var gpad = std.heap.DebugAllocator(.{}).init;
+    defer _=gpad.detectLeaks();
+    const gpa = gpad.allocator();
+
+    // Grab game storage
+    const strg = try sdl3.storage.Storage.initUser(
+        "amyhasnumbers",
+        "draggame",
+        sdl3.properties.Group{.value = 0}
+    );
+
+    // Read sensitivity
+    const sensitivity = sns: {
+        if (strg.getPathExists("sensitivity")) {
+        } else {
+            try strg.writeFile("sensitivity", "0.5");
+        }
+        const sensBuff = try gpa.alloc(u8, try strg.getFileSize("sensitivity"));
+        defer gpa.free(sensBuff);
+
+        strg.readFile("sensitivity", sensBuff) catch {
+            try sdl3.log.log("Error loading options: {s}", .{sdl3.errors.get().?});
+        };
+
+        break :sns try std.fmt.parseFloat(f32, sensBuff);
+    };
+
     // Initial window setup.
     const window = try sdl3.video.Window.init("Hello SDL3", 640, 480, .{.open_gl = true});
     defer window.deinit();
@@ -28,9 +56,9 @@ pub fn main() !void {
     // Item test
     const srfItem = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromFile("src/data/screwdriver.png", .read_binary));
 
-    const winItem = try sdl3.video.Window.init("Dummy Item", 64, 64, .{.utility = true, .borderless = true, .open_gl = true, .transparent = true});
+    const winItem = try sdl3.video.Window.init("Dummy Item", 64, 64, .{.utility = true, .borderless = true, .open_gl = true, .transparent = true, .always_on_top = true});
     defer winItem.deinit();
-    try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
+    //try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
 
     // Capture mouse
 
@@ -70,14 +98,15 @@ pub fn main() !void {
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
-                .window_focus_gained => |wn| if (wn.id==try winItem.getId()) {
-                    try sdl3.mouse.setWindowRelativeMode(winItem, true);
-                   // try winItem.setMouseGrab(true);
-                },
                 .mouse_motion => |mm| if (sdl3.mouse.getWindowRelativeMode(winItem)) {
                     const wp = try winItem.getPosition();
-                    try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel/4+@as(f32,@floatFromInt(wp.@"0")) ) } , .{ .absolute = @intFromFloat(mm.y_rel/4+@as(f32,@floatFromInt(wp.@"1")) ) });
+                    try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel*sensitivity+@as(f32,@floatFromInt(wp.@"0")) ) } , .{ .absolute = @intFromFloat(mm.y_rel*sensitivity+@as(f32,@floatFromInt(wp.@"1")) ) });
                     //sdl3.mouse.warpInWindow(null, 32, 32);
+                },
+                .mouse_button_down => |mbt| if (mbt.window_id.? == try winItem.getId()) {
+                    const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
+                    try sdl3.mouse.setWindowRelativeMode(winItem, !dropping);
+                    sdl3.mouse.warpInWindow(winItem, 32, 32);
                 },
                 else => {}
             };
