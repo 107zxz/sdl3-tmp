@@ -18,7 +18,7 @@
         devShells.default = pkgs.mkShell rec {
           buildInputs = with pkgs; [
             zls
-            zig
+            zigpkgs.master
 
             # we need to link all the 'graphical' dependencies so sdl can actually initialize
             libGL

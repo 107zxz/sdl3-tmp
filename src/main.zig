@@ -57,6 +57,7 @@ pub fn main() !void {
     const srfItem = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromFile("src/data/screwdriver.png", .read_binary));
 
     const winItem = try sdl3.video.Window.init("Dummy Item", 64, 64, .{.utility = true, .borderless = true, .open_gl = true, .transparent = true, .always_on_top = true});
+
     defer winItem.deinit();
     //try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
 
@@ -91,7 +92,7 @@ pub fn main() !void {
         while (sdl3.events.poll()) |event|
             switch (event) {
                 .key_down => |key_ev| if (key_ev.key) |key| switch (key) {
-                    .q => quit=true,
+                    .q => quit = true,
                     .escape => quit = true,
                     else => {}
                 },
@@ -103,11 +104,16 @@ pub fn main() !void {
                     try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel*sensitivity+@as(f32,@floatFromInt(wp.@"0")) ) } , .{ .absolute = @intFromFloat(mm.y_rel*sensitivity+@as(f32,@floatFromInt(wp.@"1")) ) });
                     //sdl3.mouse.warpInWindow(null, 32, 32);
                 },
-                .mouse_button_down => |mbt| if (mbt.window_id.? == try winItem.getId()) {
+                .mouse_button_down => {//|mbt| if (mbt.window_id.? == try winItem.getId()) {
                     const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
                     try sdl3.mouse.setWindowRelativeMode(winItem, !dropping);
                     sdl3.mouse.warpInWindow(winItem, 32, 32);
+
+                    // Drop
+                    if (dropping) try winItem.hide()
+                    else try winItem.show();
                 },
+                .window_focus_lost => |w| if (w.id==try winItem.getId()) try winItem.hide(),
                 else => {}
             };
    }
