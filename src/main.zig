@@ -92,6 +92,7 @@ pub fn main() !void {
         const itmSef = try winItem.getSurface();
         try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 0));
         try srfItem.blit(null, itmSef, .{ .x = 32, .y = 32 });
+        try itmSef.fillRect(.{ .x = 0, .y = 0, .w = 64, .h = 64 }, itmSef.mapRgba(0, 0, 0, 0));
         try winItem.updateSurface();
 
         // Event logic.
