@@ -28,17 +28,17 @@ pub fn main() !void {
 
     // Read setty-cmd{"ok": false, "error": "Remote control is disabled"}nsitivity
     //const |mm| sensitivity = sns: {
-        //if (strg.getPathExists("sensitivity")) {} else {
-            //try strg.writeFile("sensitivity", "0.5");
-        //}
-        //const sensBuff = try gpa.alloc(u8, try strg.getFileSize("sensitivity"));
-        //defer gpa.free(sensBuff);
-//
-        //strg.readFile("sensitivity", sensBuff) catch {
-            //try sdl3.log.log("Error loading options: {s}", .{sdl3.errors.get().?});
-        //};
-//
-        //break :sns try std.fmt.parseFloat(f32, sensBuff);
+    //if (strg.getPathExists("sensitivity")) {} else {
+    //try strg.writeFile("sensitivity", "0.5");
+    //}
+    //const sensBuff = try gpa.alloc(u8, try strg.getFileSize("sensitivity"));
+    //defer gpa.free(sensBuff);
+    //
+    //strg.readFile("sensitivity", sensBuff) catch {
+    //try sdl3.log.log("Error loading options: {s}", .{sdl3.errors.get().?});
+    //};
+    //
+    //break :sns try std.fmt.parseFloat(f32, sensBuff);
     //};
 
     // Initial window setup.
@@ -91,7 +91,7 @@ pub fn main() !void {
         // Special Item (maybe limit updates for this window HEAVILY)
         const itmSef = try winItem.getSurface();
         try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 0));
-        try srfItem.blit(null, itmSef, .{.x=32,.y=32});
+        try srfItem.blit(null, itmSef, .{ .x = 32, .y = 32 });
         try winItem.updateSurface();
 
         // Event logic.
@@ -108,8 +108,8 @@ pub fn main() !void {
                 .terminating => quit = true,
                 .mouse_motion => if (!dropping) {
                     // const wx, const wy = try winItem.getPosition();
-                    _, const mx, const my = sdl3.mouse.getGlobalState();                    //try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel * sensitivity + @as(f32, @floatFromInt(wx))) }, .{ .absolute = @intFromFloat(mm.y_rel * sensitivity + @as(f32, @floatFromInt(wy))) });
-                    try winItem.setPosition(.{ .absolute = @intFromFloat(mx-64) } , .{ .absolute = @intFromFloat(my-64) } );
+                    _, const mx, const my = sdl3.mouse.getGlobalState(); //try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel * sensitivity + @as(f32, @floatFromInt(wx))) }, .{ .absolute = @intFromFloat(mm.y_rel * sensitivity + @as(f32, @floatFromInt(wy))) });
+                    try winItem.setPosition(.{ .absolute = @intFromFloat(mx - 64) }, .{ .absolute = @intFromFloat(my - 64) });
                 },
                 .window_moved => {
                     //const wix, const wiy = try winItem.getPosition();
@@ -117,7 +117,6 @@ pub fn main() !void {
                 },
                 .mouse_button_down => {
                     // const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
-
 
                     _, const mx, const my = sdl3.mouse.getGlobalState();
                     // try sdl3.mouse.setWindowRelativeMode(winItem, !dropping);
@@ -131,13 +130,23 @@ pub fn main() !void {
 
                         try winItem.hide();
 
-                        try window.raise();
+                        // Raise the window the mouse is over
+                        for ([_]sdl3.video.Window{ window, win2 }) |win| {
+                            const wPos = try win.getPosition();
+                            const wSize = try win.getSize();
+
+                            const wRect = sdl3.rect.IRect{ .x = @intCast(wPos.@"0"), .y = @intCast(wPos.@"1"), .w = @intCast(wSize.@"0"), .h = @intCast(wSize.@"1") };
+
+                            if (wRect.pointIn(.{ .x = @intFromFloat(mx), .y = @intFromFloat(my) })) {
+                                try win.raise();
+                            }
+                        }
                     } else {
-                        try winItem.setPosition(.{ .absolute = @intFromFloat(mx-64) } , .{ .absolute = @intFromFloat(my-64) } );
+                        try winItem.setPosition(.{ .absolute = @intFromFloat(mx - 64) }, .{ .absolute = @intFromFloat(my - 64) });
                         try winItem.show();
                     }
                 },
-                .window_focus_lost => |w| if (w.id == try winItem.getId()) try winItem.hide(),
+                //.window_focus_lost => |w| if (w.id == try winItem.getId()) try winItem.hide(),
                 else => {},
             };
     }
