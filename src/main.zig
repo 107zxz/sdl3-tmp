@@ -2,9 +2,9 @@ const sdl3 = @import("sdl3");
 const std = @import("std");
 
 fn htr_top(w: sdl3.video.Window, p: sdl3.rect.Point(i32), u: ?*void) sdl3.video.HitTestResult {
-    _=w;
-    _=u;
-    return if (p.y<32) sdl3.video.HitTestResult.draggable else sdl3.video.HitTestResult.normal;
+    _ = w;
+    _ = u;
+    return if (p.y < 32) sdl3.video.HitTestResult.draggable else sdl3.video.HitTestResult.normal;
 }
 
 pub fn main() !void {
@@ -17,20 +17,15 @@ pub fn main() !void {
 
     // Memory allocation
     var gpad = std.heap.DebugAllocator(.{}).init;
-    defer _=gpad.detectLeaks();
+    defer _ = gpad.detectLeaks();
     const gpa = gpad.allocator();
 
     // Grab game storage
-    const strg = try sdl3.storage.Storage.initUser(
-        "amyhasnumbers",
-        "draggame",
-        sdl3.properties.Group{.value = 0}
-    );
+    const strg = try sdl3.storage.Storage.initUser("amyhasnumbers", "draggame", sdl3.properties.Group{ .value = 0 });
 
     // Read sensitivity
     const sensitivity = sns: {
-        if (strg.getPathExists("sensitivity")) {
-        } else {
+        if (strg.getPathExists("sensitivity")) {} else {
             try strg.writeFile("sensitivity", "0.5");
         }
         const sensBuff = try gpa.alloc(u8, try strg.getFileSize("sensitivity"));
@@ -44,11 +39,11 @@ pub fn main() !void {
     };
 
     // Initial window setup.
-    const window = try sdl3.video.Window.init("Hello SDL3", 640, 480, .{.open_gl = true});
+    const window = try sdl3.video.Window.init("Hello SDL3", 640, 480, .{ .open_gl = true });
     defer window.deinit();
     try window.setPosition(.{ .centered = null }, .{ .centered = null });
 
-    const win2 = try sdl3.video.Window.init("Director [You]", 192, 256, .{.utility = true, .borderless = true, .open_gl = true});
+    const win2 = try sdl3.video.Window.init("Director [You]", 192, 256, .{ .utility = true, .borderless = true });
     defer win2.deinit();
     try win2.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
     try win2.setHitTest(void, htr_top, null);
@@ -56,9 +51,10 @@ pub fn main() !void {
     // Item test
     const srfItem = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromFile("src/data/screwdriver.png", .read_binary));
 
-    const winItem = try sdl3.video.Window.init("Dummy Item", 64, 64, .{.utility = true, .borderless = true, .open_gl = true, .transparent = true, .always_on_top = true});
-
+    const winItem = try sdl3.video.Window.init("Dummy Item", 64, 64, .{ .utility = true, .borderless = true, .transparent = true, .always_on_top = true });
     defer winItem.deinit();
+    //try winItem.setShape(srfItem);
+    try winItem.hide();
     //try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
 
     // Capture mouse
@@ -74,17 +70,17 @@ pub fn main() !void {
 
         // Update logic.
         const surface = try window.getSurface();
-        inline for ([_]sdl3.video.Window{window, win2}) |win| {
+        inline for ([_]sdl3.video.Window{ window, win2 }) |win| {
             const winSrf = try win.getSurface();
             try winSrf.fillRect(null, surface.mapRgb(128, 30, 255));
-            try winSrf.fillRect(.{.x=0,.y=0,.w=192,.h=32}, surface.mapRgb(30, 128, 255));
+            try winSrf.fillRect(.{ .x = 0, .y = 0, .w = 192, .h = 32 }, surface.mapRgb(30, 128, 255));
 
             try win.updateSurface();
         }
 
-        // Special Item
+        // Special Item (maybe limit updates for this window HEAVILY)
         const itmSef = try winItem.getSurface();
-        try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 255));
+        try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 0));
         try srfItem.blit(null, itmSef, null);
         try winItem.updateSurface();
 
@@ -94,27 +90,33 @@ pub fn main() !void {
                 .key_down => |key_ev| if (key_ev.key) |key| switch (key) {
                     .q => quit = true,
                     .escape => quit = true,
-                    else => {}
+                    .f => try window.setFullscreen(!window.getFlags().fullscreen),
+                    else => {},
                 },
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
                 .mouse_motion => |mm| if (sdl3.mouse.getWindowRelativeMode(winItem)) {
                     const wp = try winItem.getPosition();
-                    try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel*sensitivity+@as(f32,@floatFromInt(wp.@"0")) ) } , .{ .absolute = @intFromFloat(mm.y_rel*sensitivity+@as(f32,@floatFromInt(wp.@"1")) ) });
-                    //sdl3.mouse.warpInWindow(null, 32, 32);
+                    try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel * sensitivity + @as(f32, @floatFromInt(wp.@"0"))) }, .{ .absolute = @intFromFloat(mm.y_rel * sensitivity + @as(f32, @floatFromInt(wp.@"1"))) });
                 },
-                .mouse_button_down => {//|mbt| if (mbt.window_id.? == try winItem.getId()) {
+                .mouse_button_down => {
                     const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
+
+                    _, const mx, const my = sdl3.mouse.getGlobalState();
                     try sdl3.mouse.setWindowRelativeMode(winItem, !dropping);
-                    sdl3.mouse.warpInWindow(winItem, 32, 32);
 
                     // Drop
-                    if (dropping) try winItem.hide()
-                    else try winItem.show();
+                    if (dropping) {
+                        sdl3.mouse.warpInWindow(winItem, 32, 32);
+                        try winItem.hide();
+                    } else {
+                        try winItem.setPosition(.{ .absolute = @intFromFloat(mx - 32) }, .{ .absolute = @intFromFloat(my - 32) });
+                        try winItem.show();
+                    }
                 },
-                .window_focus_lost => |w| if (w.id==try winItem.getId()) try winItem.hide(),
-                else => {}
+                .window_focus_lost => |w| if (w.id == try winItem.getId()) try winItem.hide(),
+                else => {},
             };
-   }
+    }
 }

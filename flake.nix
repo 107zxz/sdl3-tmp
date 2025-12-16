@@ -12,13 +12,14 @@
         pkgs = import nixpkgs {
           inherit system;
           overlays = [ zig-overlay.overlays.default ];
+          config.allowUnfree = true;
         };
       in
       {
         devShells.default = pkgs.mkShell rec {
           buildInputs = with pkgs; [
             zls
-            zigpkgs.master
+            zig
 
             # we need to link all the 'graphical' dependencies so sdl can actually initialize
             libGL
