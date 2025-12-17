@@ -57,7 +57,8 @@ pub fn main() !void {
     try winItem.hide();
     //try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
 
-    // Capture mouse
+    // Gamestate???
+    var itemPos: [2]isize = .{32, 32};
 
     // Useful for limiting the FPS and getting the delta time.
     var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 60 } };
@@ -69,11 +70,16 @@ pub fn main() !void {
         _ = dt;
 
         // Update logic.
-        const surface = try window.getSurface();
         inline for ([_]sdl3.video.Window{ window, win2 }) |win| {
             const winSrf = try win.getSurface();
-            try winSrf.fillRect(null, surface.mapRgb(128, 30, 255));
-            try winSrf.fillRect(.{ .x = 0, .y = 0, .w = 192, .h = 32 }, surface.mapRgb(30, 128, 255));
+            try winSrf.fillRect(null, winSrf.mapRgb(128, 30, 255));
+            try winSrf.fillRect(.{ .x = 0, .y = 0, .w = 192, .h = 32 }, winSrf.mapRgb(30, 128, 255));
+
+            if (winItem.getFlags().hidden) {
+                const iwx, const iwy = itemPos;
+                const wwx, const wwy = try win.getPosition();
+                try srfItem.blit(null, winSrf, .{ .x = @intCast(iwx - wwx), .y = @intCast(iwy - wwy) });
+            }
 
             try win.updateSurface();
         }
@@ -100,6 +106,10 @@ pub fn main() !void {
                     const wp = try winItem.getPosition();
                     try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel * sensitivity + @as(f32, @floatFromInt(wp.@"0"))) }, .{ .absolute = @intFromFloat(mm.y_rel * sensitivity + @as(f32, @floatFromInt(wp.@"1"))) });
                 },
+                .window_moved => {
+                    //const wix, const wiy = try winItem.getPosition();
+                    //winItem.setPosition(.{ .absolute =  } )
+                },
                 .mouse_button_down => {
                     const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
 
@@ -108,6 +118,7 @@ pub fn main() !void {
 
                     // Drop
                     if (dropping) {
+                        itemPos = try winItem.getPosition();
                         sdl3.mouse.warpInWindow(winItem, 32, 32);
                         try winItem.hide();
                     } else {
