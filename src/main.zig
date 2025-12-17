@@ -10,6 +10,9 @@ fn htr_top(w: sdl3.video.Window, p: sdl3.rect.Point(i32), u: ?*void) sdl3.video.
 pub fn main() !void {
     defer sdl3.shutdown();
 
+    // Stupid log dumy
+    errdefer std.debug.print("SDL ERROR: {s}\n", .{sdl3.errors.get().?});
+
     // Initialize SDL with subsystems you need here.
     const init_flags = sdl3.InitFlags{ .video = true };
     try sdl3.init(init_flags);
@@ -18,25 +21,25 @@ pub fn main() !void {
     // Memory allocation
     var gpad = std.heap.DebugAllocator(.{}).init;
     defer _ = gpad.detectLeaks();
-    const gpa = gpad.allocator();
+    //const gpa = gpad.allocator();
 
     // Grab game storage
-    const strg = try sdl3.storage.Storage.initUser("amyhasnumbers", "draggame", sdl3.properties.Group{ .value = 0 });
+    //const strg = try sdl3.storage.Storage.initUser("amyhasnumbers", "draggame", sdl3.properties.Group{ .value = 0 });
 
-    // Read sensitivity
-    const sensitivity = sns: {
-        if (strg.getPathExists("sensitivity")) {} else {
-            try strg.writeFile("sensitivity", "0.5");
-        }
-        const sensBuff = try gpa.alloc(u8, try strg.getFileSize("sensitivity"));
-        defer gpa.free(sensBuff);
-
-        strg.readFile("sensitivity", sensBuff) catch {
-            try sdl3.log.log("Error loading options: {s}", .{sdl3.errors.get().?});
-        };
-
-        break :sns try std.fmt.parseFloat(f32, sensBuff);
-    };
+    // Read setty-cmd{"ok": false, "error": "Remote control is disabled"}nsitivity
+    //const |mm| sensitivity = sns: {
+        //if (strg.getPathExists("sensitivity")) {} else {
+            //try strg.writeFile("sensitivity", "0.5");
+        //}
+        //const sensBuff = try gpa.alloc(u8, try strg.getFileSize("sensitivity"));
+        //defer gpa.free(sensBuff);
+//
+        //strg.readFile("sensitivity", sensBuff) catch {
+            //try sdl3.log.log("Error loading options: {s}", .{sdl3.errors.get().?});
+        //};
+//
+        //break :sns try std.fmt.parseFloat(f32, sensBuff);
+    //};
 
     // Initial window setup.
     const window = try sdl3.video.Window.init("Hello SDL3", 640, 480, .{ .open_gl = true });
@@ -51,14 +54,15 @@ pub fn main() !void {
     // Item test
     const srfItem = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromFile("src/data/screwdriver.png", .read_binary));
 
-    const winItem = try sdl3.video.Window.init("Dummy Item", 64, 64, .{ .utility = true, .borderless = true, .transparent = true, .always_on_top = true });
+    const winItem = try sdl3.video.Window.init("Dummy Item", 128, 128, .{ .utility = true, .borderless = true, .transparent = true, .always_on_top = true });
     defer winItem.deinit();
     //try winItem.setShape(srfItem);
     try winItem.hide();
     //try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
 
     // Gamestate???
-    var itemPos: [2]isize = .{32, 32};
+    var itemPos: [2]isize = .{ 32, 32 };
+    var dropping = true;
 
     // Useful for limiting the FPS and getting the delta time.
     var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 60 } };
@@ -78,7 +82,7 @@ pub fn main() !void {
             if (winItem.getFlags().hidden) {
                 const iwx, const iwy = itemPos;
                 const wwx, const wwy = try win.getPosition();
-                try srfItem.blit(null, winSrf, .{ .x = @intCast(iwx - wwx), .y = @intCast(iwy - wwy) });
+                try srfItem.blit(null, winSrf, .{ .x = @intCast(iwx - wwx + 32), .y = @intCast(iwy - wwy + 32) });
             }
 
             try win.updateSurface();
@@ -87,7 +91,7 @@ pub fn main() !void {
         // Special Item (maybe limit updates for this window HEAVILY)
         const itmSef = try winItem.getSurface();
         try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 0));
-        try srfItem.blit(null, itmSef, null);
+        try srfItem.blit(null, itmSef, .{.x=32,.y=32});
         try winItem.updateSurface();
 
         // Event logic.
@@ -102,27 +106,34 @@ pub fn main() !void {
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
-                .mouse_motion => |mm| if (sdl3.mouse.getWindowRelativeMode(winItem)) {
-                    const wp = try winItem.getPosition();
-                    try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel * sensitivity + @as(f32, @floatFromInt(wp.@"0"))) }, .{ .absolute = @intFromFloat(mm.y_rel * sensitivity + @as(f32, @floatFromInt(wp.@"1"))) });
+                .mouse_motion => if (!dropping) {
+                    // const wx, const wy = try winItem.getPosition();
+                    _, const mx, const my = sdl3.mouse.getGlobalState();                    //try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel * sensitivity + @as(f32, @floatFromInt(wx))) }, .{ .absolute = @intFromFloat(mm.y_rel * sensitivity + @as(f32, @floatFromInt(wy))) });
+                    try winItem.setPosition(.{ .absolute = @intFromFloat(mx-64) } , .{ .absolute = @intFromFloat(my-64) } );
                 },
                 .window_moved => {
                     //const wix, const wiy = try winItem.getPosition();
                     //winItem.setPosition(.{ .absolute =  } )
                 },
                 .mouse_button_down => {
-                    const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
+                    // const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
+
 
                     _, const mx, const my = sdl3.mouse.getGlobalState();
-                    try sdl3.mouse.setWindowRelativeMode(winItem, !dropping);
+                    // try sdl3.mouse.setWindowRelativeMode(winItem, !dropping);
+
+                    dropping = !dropping;
 
                     // Drop
                     if (dropping) {
                         itemPos = try winItem.getPosition();
-                        sdl3.mouse.warpInWindow(winItem, 32, 32);
+                        //sdl3.mouse.warpInWindow(winItem, 32, 32);
+
                         try winItem.hide();
+
+                        try window.raise();
                     } else {
-                        try winItem.setPosition(.{ .absolute = @intFromFloat(mx - 32) }, .{ .absolute = @intFromFloat(my - 32) });
+                        try winItem.setPosition(.{ .absolute = @intFromFloat(mx-64) } , .{ .absolute = @intFromFloat(my-64) } );
                         try winItem.show();
                     }
                 },
