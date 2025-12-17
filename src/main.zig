@@ -56,13 +56,11 @@ pub fn main() !void {
 
     const winItem = try sdl3.video.Window.init("Dummy Item", 128, 128, .{ .utility = true, .borderless = true, .transparent = true, .always_on_top = true });
     defer winItem.deinit();
-    //try winItem.setShape(srfItem);
     try winItem.hide();
-    //try winItem.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
 
     // Gamestate???
-    var itemPos: [2]isize = .{ 32, 32 };
-    var dropping = true;
+    const itemPos: [2]isize = .{ 72, 72 };
+    var itemHeld = true;
 
     // Useful for limiting the FPS and getting the delta time.
     var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 60 } };
@@ -79,9 +77,13 @@ pub fn main() !void {
             try winSrf.fillRect(null, winSrf.mapRgb(128, 30, 255));
             try winSrf.fillRect(.{ .x = 0, .y = 0, .w = 192, .h = 32 }, winSrf.mapRgb(30, 128, 255));
 
+            // Item slot
+            const iwx, const iwy = itemPos;
+            const wwx, const wwy = try win.getPosition();
+
+            try winSrf.fillRect(.{.x = @intCast(iwx - wwx + 32), .y = @intCast(iwy - wwy + 32), .w=64, .h=64}, winSrf.mapRgb(64, 0, 64));
+
             if (winItem.getFlags().hidden) {
-                const iwx, const iwy = itemPos;
-                const wwx, const wwy = try win.getPosition();
                 try srfItem.blit(null, winSrf, .{ .x = @intCast(iwx - wwx + 32), .y = @intCast(iwy - wwy + 32) });
             }
 
@@ -92,7 +94,6 @@ pub fn main() !void {
         const itmSef = try winItem.getSurface();
         try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 0));
         try srfItem.blit(null, itmSef, .{ .x = 32, .y = 32 });
-        try itmSef.fillRect(.{ .x = 0, .y = 0, .w = 64, .h = 64 }, itmSef.mapRgba(0, 0, 0, 0));
         try winItem.updateSurface();
 
         // Event logic.
@@ -107,27 +108,24 @@ pub fn main() !void {
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
-                .mouse_motion => if (!dropping) {
-                    // const wx, const wy = try winItem.getPosition();
-                    _, const mx, const my = sdl3.mouse.getGlobalState(); //try winItem.setPosition(.{ .absolute = @intFromFloat(mm.x_rel * sensitivity + @as(f32, @floatFromInt(wx))) }, .{ .absolute = @intFromFloat(mm.y_rel * sensitivity + @as(f32, @floatFromInt(wy))) });
+                .mouse_motion => if (!itemHeld) {
+                    _, const mx, const my = sdl3.mouse.getGlobalState();
                     try winItem.setPosition(.{ .absolute = @intFromFloat(mx - 64) }, .{ .absolute = @intFromFloat(my - 64) });
                 },
-                .window_moved => {
-                    //const wix, const wiy = try winItem.getPosition();
-                    //winItem.setPosition(.{ .absolute =  } )
-                },
                 .mouse_button_down => {
-                    // const dropping = sdl3.mouse.getWindowRelativeMode(winItem);
-
                     _, const mx, const my = sdl3.mouse.getGlobalState();
-                    // try sdl3.mouse.setWindowRelativeMode(winItem, !dropping);
 
-                    dropping = !dropping;
+                    // Make sure we're close to the item!
+                    const itemRect = sdl3.rect.FRect{ .x = @floatFromInt(itemPos[0]), .y = @floatFromInt(itemPos[1]), .w = 128, .h = 128 };
+                    if (!itemRect.pointIn(.{ .x = mx, .y = my})) {
+                        continue;
+                    }
+
+                    itemHeld = !itemHeld;
 
                     // Drop
-                    if (dropping) {
-                        itemPos = try winItem.getPosition();
-                        //sdl3.mouse.warpInWindow(winItem, 32, 32);
+                    if (itemHeld) {
+                        //itemPos = try winItem.getPosition();
 
                         try winItem.hide();
 
@@ -147,7 +145,6 @@ pub fn main() !void {
                         try winItem.show();
                     }
                 },
-                //.window_focus_lost => |w| if (w.id == try winItem.getId()) try winItem.hide(),
                 else => {},
             };
     }
