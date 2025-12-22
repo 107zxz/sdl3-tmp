@@ -1,6 +1,8 @@
 const sdl3 = @import("sdl3");
 const std = @import("std");
 
+const itm = @import("itm.zig");
+
 fn htr_top(w: sdl3.video.Window, p: sdl3.rect.Point(i32), u: ?*void) sdl3.video.HitTestResult {
     _ = w;
     _ = u;
@@ -11,7 +13,10 @@ pub fn main() !void {
     defer sdl3.shutdown();
 
     // Stupid log dumy
-    errdefer std.debug.print("SDL ERROR: {s}\n", .{sdl3.errors.get().?});
+    errdefer std.log.err("SDL ERROR: {s}\n", .{sdl3.errors.get().?});
+
+    // Bootup log
+    std.log.info("BOOTING UP!\n", .{});
 
     // Initialize SDL with subsystems you need here.
     const init_flags = sdl3.InitFlags{ .video = true };
@@ -26,7 +31,6 @@ pub fn main() !void {
     // Grab game storage
     //const strg = try sdl3.storage.Storage.initUser("amyhasnumbers", "draggame", sdl3.properties.Group{ .value = 0 });
 
-    // Read setty-cmd{"ok": false, "error": "Remote control is disabled"}nsitivity
     //const |mm| sensitivity = sns: {
     //if (strg.getPathExists("sensitivity")) {} else {
     //try strg.writeFile("sensitivity", "0.5");
@@ -42,25 +46,22 @@ pub fn main() !void {
     //};
 
     // Initial window setup.
-    const window = try sdl3.video.Window.init("Hello SDL3", 640, 480, .{ .open_gl = true });
+    const window = try sdl3.video.Window.init("Hello SDL3", 640, 480, .{ .borderless = true });
     defer window.deinit();
     try window.setPosition(.{ .centered = null }, .{ .centered = null });
+    try window.setHitTest(void, htr_top, null);
 
     const win2 = try sdl3.video.Window.init("Director [You]", 192, 256, .{ .utility = true, .borderless = true });
     defer win2.deinit();
-    try win2.setPosition(.{ .absolute = 10 }, .{ .absolute = 10 });
+    try win2.setPosition(.{ .absolute = 32 }, .{ .absolute = 32 });
     try win2.setHitTest(void, htr_top, null);
 
     // Item test
     const srfItem = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromFile("src/data/screwdriver.png", .read_binary));
+    var itemWin = try itm.ItemMoveWin.init();
 
-    const winItem = try sdl3.video.Window.init("Dummy Item", 128, 128, .{ .utility = true, .borderless = true, .transparent = true, .always_on_top = true });
-    defer winItem.deinit();
-    try winItem.hide();
-
-    // Gamestate???
-    const itemPos: [2]isize = .{ 72, 72 };
-    var itemHeld = true;
+    // Slot test
+    const slotA = itm.ItemSlot.new(72, 72, &window, srfItem);
 
     // Useful for limiting the FPS and getting the delta time.
     var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 60 } };
@@ -75,29 +76,20 @@ pub fn main() !void {
         inline for ([_]sdl3.video.Window{ window, win2 }) |win| {
             const winSrf = try win.getSurface();
             try winSrf.fillRect(null, winSrf.mapRgb(128, 30, 255));
-            try winSrf.fillRect(.{ .x = 0, .y = 0, .w = 192, .h = 32 }, winSrf.mapRgb(30, 128, 255));
-
-            // Item slot
-            const iwx, const iwy = itemPos;
-            const wwx, const wwy = try win.getPosition();
-
-            try winSrf.fillRect(.{.x = @intCast(iwx - wwx + 32), .y = @intCast(iwy - wwy + 32), .w=64, .h=64}, winSrf.mapRgb(64, 0, 64));
-
-            if (winItem.getFlags().hidden) {
-                try srfItem.blit(null, winSrf, .{ .x = @intCast(iwx - wwx + 32), .y = @intCast(iwy - wwy + 32) });
-            }
-
-            try win.updateSurface();
+            try winSrf.fillRect(.{ .x = 0, .y = 0, .w = @intCast(winSrf.getWidth()), .h = 32 }, winSrf.mapRgb(30, 128, 255));
         }
 
-        // Special Item (maybe limit updates for this window HEAVILY)
-        const itmSef = try winItem.getSurface();
-        try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 0));
-        try srfItem.blit(null, itmSef, .{ .x = 32, .y = 32 });
-        try winItem.updateSurface();
+        try slotA.draw(!itemWin.visible());
+
+        try window.updateSurface();
+        try win2.updateSurface();
+
+        try itemWin.draw();
 
         // Event logic.
-        while (sdl3.events.poll()) |event|
+        while (sdl3.events.poll()) |event| {
+            try itemWin.handleEvent(event);
+
             switch (event) {
                 .key_down => |key_ev| if (key_ev.key) |key| switch (key) {
                     .q => quit = true,
@@ -108,44 +100,9 @@ pub fn main() !void {
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
-                .mouse_motion => if (!itemHeld) {
-                    _, const mx, const my = sdl3.mouse.getGlobalState();
-                    try winItem.setPosition(.{ .absolute = @intFromFloat(mx - 64) }, .{ .absolute = @intFromFloat(my - 64) });
-                },
-                .mouse_button_down => {
-                    _, const mx, const my = sdl3.mouse.getGlobalState();
-
-                    // Make sure we're close to the item!
-                    const itemRect = sdl3.rect.FRect{ .x = @floatFromInt(itemPos[0]), .y = @floatFromInt(itemPos[1]), .w = 128, .h = 128 };
-                    if (!itemRect.pointIn(.{ .x = mx, .y = my})) {
-                        continue;
-                    }
-
-                    itemHeld = !itemHeld;
-
-                    // Drop
-                    if (itemHeld) {
-                        //itemPos = try winItem.getPosition();
-
-                        try winItem.hide();
-
-                        // Raise the window the mouse is over
-                        for ([_]sdl3.video.Window{ window, win2 }) |win| {
-                            const wPos = try win.getPosition();
-                            const wSize = try win.getSize();
-
-                            const wRect = sdl3.rect.IRect{ .x = @intCast(wPos.@"0"), .y = @intCast(wPos.@"1"), .w = @intCast(wSize.@"0"), .h = @intCast(wSize.@"1") };
-
-                            if (wRect.pointIn(.{ .x = @intFromFloat(mx), .y = @intFromFloat(my) })) {
-                                try win.raise();
-                            }
-                        }
-                    } else {
-                        try winItem.setPosition(.{ .absolute = @intFromFloat(mx - 64) }, .{ .absolute = @intFromFloat(my - 64) });
-                        try winItem.show();
-                    }
-                },
+                .mouse_button_down => |mbd| if (slotA.isHovered() and mbd.window_id.? != try itemWin.getId()) try itemWin.show(srfItem),
                 else => {},
-            };
+            }
+        }
     }
 }
