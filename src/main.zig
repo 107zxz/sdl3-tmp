@@ -4,9 +4,17 @@ const std = @import("std");
 const itm = @import("itm.zig");
 
 fn htr_top(w: sdl3.video.Window, p: sdl3.rect.Point(i32), u: ?*void) sdl3.video.HitTestResult {
-    _ = w;
     _ = u;
-    return if (p.y < 32) sdl3.video.HitTestResult.draggable else sdl3.video.HitTestResult.normal;
+
+    const ww, _ = w.getSizeInPixels() catch .{0,0};
+
+    if (p.y > 32) {
+        return .normal;
+    } else if (p.x < ww - 32) {
+        return .draggable;
+    } else {
+        return .normal;
+    }
 }
 
 pub fn main() !void {
@@ -26,24 +34,6 @@ pub fn main() !void {
     // Memory allocation
     var gpad = std.heap.DebugAllocator(.{}).init;
     defer _ = gpad.detectLeaks();
-    //const gpa = gpad.allocator();
-
-    // Grab game storage
-    //const strg = try sdl3.storage.Storage.initUser("amyhasnumbers", "draggame", sdl3.properties.Group{ .value = 0 });
-
-    //const |mm| sensitivity = sns: {
-    //if (strg.getPathExists("sensitivity")) {} else {
-    //try strg.writeFile("sensitivity", "0.5");
-    //}
-    //const sensBuff = try gpa.alloc(u8, try strg.getFileSize("sensitivity"));
-    //defer gpa.free(sensBuff);
-    //
-    //strg.readFile("sensitivity", sensBuff) catch {
-    //try sdl3.log.log("Error loading options: {s}", .{sdl3.errors.get().?});
-    //};
-    //
-    //break :sns try std.fmt.parseFloat(f32, sensBuff);
-    //};
 
     // Initial window setup.
     const window = try sdl3.video.Window.init("Hello SDL3", 640, 480, .{ .borderless = true });
@@ -56,12 +46,19 @@ pub fn main() !void {
     try win2.setPosition(.{ .absolute = 32 }, .{ .absolute = 32 });
     try win2.setHitTest(void, htr_top, null);
 
+    try itm.ItemMoveWin.init();
+    const itemWin = itm.ItemMoveWin.get();
+
     // Item test
     const srfItem = try sdl3.image.loadPngIo(try sdl3.io_stream.Stream.initFromFile("src/data/screwdriver.png", .read_binary));
-    var itemWin = try itm.ItemMoveWin.init();
+    const srfItem2 = try srfItem.duplicate();
+    try srfItem2.setColorMod(128, 128, 255);
 
     // Slot test
-    const slotA = itm.ItemSlot.new(72, 72, &window, srfItem);
+    var slotA = itm.ItemSlot.new(72, 72, &window, srfItem);
+    var slotB = itm.ItemSlot.new(72, 72, &win2, null);
+    var slotC = itm.ItemSlot.new(156, 72, &window, srfItem2);
+    const allSlots = [_]*itm.ItemSlot{&slotA, &slotB, &slotC};
 
     // Useful for limiting the FPS and getting the delta time.
     var fps_capper = sdl3.extras.FramerateCapper(f32){ .mode = .{ .limited = 60 } };
@@ -73,18 +70,20 @@ pub fn main() !void {
         _ = dt;
 
         // Update logic.
-        inline for ([_]sdl3.video.Window{ window, win2 }) |win| {
+        for ([_]sdl3.video.Window{ window, win2 }) |win| {
             const winSrf = try win.getSurface();
             try winSrf.fillRect(null, winSrf.mapRgb(128, 30, 255));
             try winSrf.fillRect(.{ .x = 0, .y = 0, .w = @intCast(winSrf.getWidth()), .h = 32 }, winSrf.mapRgb(30, 128, 255));
         }
 
-        try slotA.draw(!itemWin.visible());
+        for (allSlots) |slt| {
+            try slt.draw();
+        }
 
         try window.updateSurface();
         try win2.updateSurface();
 
-        try itemWin.draw();
+        try itm.ItemMoveWin.get().draw();
 
         // Event logic.
         while (sdl3.events.poll()) |event| {
@@ -100,7 +99,43 @@ pub fn main() !void {
                 .window_close_requested => quit = true,
                 .quit => quit = true,
                 .terminating => quit = true,
-                .mouse_button_down => |mbd| if (slotA.isHovered() and mbd.window_id.? != try itemWin.getId()) try itemWin.show(srfItem),
+                .mouse_button_down => |mbd| {
+                    for (allSlots) |slt| {
+                        if (slt.isHovered()) { // Slot clicked
+
+                            // Special: return to current slot
+                            if (slt == itemWin.getSlotDraggedFrom()) {
+                                try itemWin.hide();
+                            } else if (slt.hasItem()) {
+
+                                // Special: block if slot full
+                                if (itemWin.getDraggedItem() != null) {
+                                    const heldItem = itemWin.getDraggedItem().?;
+                                    itemWin.getSlotDraggedFrom().?.putItem(slt.getItem().?);
+
+                                    slt.putItem(heldItem);
+                                    //break;
+                                } else {
+                                    try itemWin.show(slt);
+                                }
+                            } else if (mbd.window_id == try itemWin.getId()) {
+                                // Drop item!
+                                slt.putItem(itemWin.getDraggedItem().?);
+                                itemWin.getSlotDraggedFrom().?.putItem(null);
+
+                                try slt.getWindow().raise();
+
+                                try itemWin.hide();
+                            }
+
+                            break;
+                        }
+                    } else {
+                        // If background clicked return item
+                        //try itemWin.getSlotDraggedFrom().?.getWindow().raise();
+                        try itemWin.hide();
+                    }
+                },
                 else => {},
             }
         }

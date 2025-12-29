@@ -8,10 +8,10 @@ inline fn mapF32(comptime T: type, arr: [2]T) [2]f32 {
 pub const ItemSlot = struct {
     cx: i32,
     cy: i32,
-    icon: sdl3.surface.Surface,
+    icon: ?sdl3.surface.Surface,
     window: *const sdl3.video.Window,
 
-    pub fn new(x: i32, y: i32, window: *const sdl3.video.Window, icon: sdl3.surface.Surface) ItemSlot {
+    pub fn new(x: i32, y: i32, window: *const sdl3.video.Window, icon: ?sdl3.surface.Surface) ItemSlot {
         return ItemSlot{ .cx = x, .cy = y, .icon = icon, .window = window };
     }
 
@@ -26,26 +26,50 @@ pub const ItemSlot = struct {
         return mx > x1 + winX - 32 and mx < x1 + 32 + winX and my > y1 - 32 + winY and my < y1 + 32 + winY;
     }
 
-    pub fn draw(self: ItemSlot, showItem: bool) !void {
+    pub fn draw(self: ItemSlot) !void {
+
+        const showItem = ItemMoveWin.get().getSlotDraggedFrom() != &self;
+
         const surf = try self.window.getSurface();
 
-        try surf.fillRect(.{ .x = self.cx - 32, .y = self.cy - 32, .w = 64, .h = 64 }, if (self.isHovered()) surf.mapRgb(128, 128, 0) else surf.mapRgb(128, 0, 128));
+        try surf.fillRect(.{ .x = self.cx - 32, .y = self.cy - 32, .w = 64, .h = 64 }, if (!showItem or self.isHovered()) surf.mapRgb(128, 128, 0) else surf.mapRgb(128, 0, 128));
 
-        if (showItem)
-            try self.icon.blit(null, surf, .{ .x = self.cx - 32, .y = self.cy - 32 });
+        if (showItem and self.icon != null)
+            try self.icon.?.blit(null, surf, .{ .x = self.cx - 32, .y = self.cy - 32 });
+    }
+
+    pub fn getItem(self: ItemSlot) ?sdl3.surface.Surface {
+        return self.icon;
+    }
+
+    pub fn hasItem(self: ItemSlot) bool {
+        return self.icon != null;
+    }
+
+    pub fn putItem(self: *ItemSlot, item: ?sdl3.surface.Surface) void {
+        self.icon = item;
+    }
+
+    pub fn getWindow(self: ItemSlot) *const sdl3.video.Window {
+        return self.window;
     }
 };
 
 pub const ItemMoveWin = struct {
-    isVisible: bool,
-    handle: sdl3.video.Window,
-    surface: ?sdl3.surface.Surface,
 
-    pub fn init() !ItemMoveWin {
-        const self = ItemMoveWin{ .handle = try sdl3.video.Window.init("Dummy Item", 128, 128, .{ .utility = true, .borderless = true, .transparent = true, .always_on_top = true }), .surface = null, .isVisible = false };
+    handle: sdl3.video.Window,
+    slotDraggedFrom: ?*ItemSlot,
+
+    var  singleton: ?ItemMoveWin = null;
+    pub fn get() *ItemMoveWin {
+        return &singleton.?;
+    }
+
+    pub fn init() !void {
+        const self = ItemMoveWin{ .handle = try sdl3.video.Window.init("Dummy Item", 128, 128, .{ .utility = true, .borderless = true, .transparent = true, .always_on_top = true }), .slotDraggedFrom = null };
         try self.handle.hide();
 
-        return self;
+        singleton = self;
     }
 
     pub fn deinit(self: ItemMoveWin) void {
@@ -57,12 +81,13 @@ pub const ItemMoveWin = struct {
         // Special Item (maybe limit updates for this window HEAVILY)
         const itmSef = try self.handle.getSurface();
         try itmSef.fillRect(null, itmSef.mapRgba(0, 0, 0, 0));
-        try self.surface.?.blit(null, itmSef, .{ .x = 32, .y = 32 });
+        if (self.slotDraggedFrom.?.getItem()) |icon|
+            try icon.blit(null, itmSef, .{ .x = 32, .y = 32 });
         try self.handle.updateSurface();
     }
 
     pub fn visible(self: ItemMoveWin) bool {
-        return self.isVisible;
+        return self.slotDraggedFrom != null;
     }
 
     pub fn updatePosition(self: ItemMoveWin) !void {
@@ -75,32 +100,13 @@ pub const ItemMoveWin = struct {
             .mouse_motion => if (self.visible()) {
                 try self.updatePosition();
             },
-            .mouse_button_down => |mbd| if (self.visible() and mbd.button == sdl3.mouse.Button.left and mbd.window_id == try self.handle.getId()) {
-                _, const mx, const my = sdl3.mouse.getGlobalState();
-
-                // Raise the window the mouse is over
-                for (try sdl3.video.getWindows()) |win| {
-                    const wPos = try win.getPosition();
-                    const wSize = try win.getSize();
-
-                    const wRect = sdl3.rect.IRect{ .x = @intCast(wPos.@"0"), .y = @intCast(wPos.@"1"), .w = @intCast(wSize.@"0"), .h = @intCast(wSize.@"1") };
-
-                    if (wRect.pointIn(.{ .x = @intFromFloat(mx), .y = @intFromFloat(my) }) and win != self.handle) {
-                        try win.raise();
-                        break;
-                    }
-                }
-
-                try self.hide();
-            },
             else => {},
         }
     }
 
-    pub fn show(self: *ItemMoveWin, surface: sdl3.surface.Surface) !void {
+    pub fn show(self: *ItemMoveWin, slotDraggedFrom: *ItemSlot) !void {
         try self.handle.show();
-        self.isVisible = true;
-        self.surface = surface;
+        self.slotDraggedFrom = slotDraggedFrom;
 
         _, const mx, const my = sdl3.mouse.getGlobalState();
         try self.handle.setPosition(.{ .absolute = @intFromFloat(mx - 64) }, .{ .absolute = @intFromFloat(my - 64) });
@@ -108,10 +114,22 @@ pub const ItemMoveWin = struct {
 
     pub fn hide(self: *ItemMoveWin) !void {
         try self.handle.hide();
-        self.isVisible = false;
+        self.slotDraggedFrom = null;
     }
 
     pub fn getId(self: ItemMoveWin) !u32 {
         return self.handle.getId();
+    }
+
+    pub fn getSlotDraggedFrom(self: ItemMoveWin) ?*ItemSlot {
+        return self.slotDraggedFrom;
+    }
+
+    pub fn getDraggedItem(self: ItemMoveWin) ?sdl3.surface.Surface {
+        if (self.getSlotDraggedFrom()) |slt| {
+            return slt.getItem();
+        }
+
+        return null;
     }
 };
